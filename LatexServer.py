@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # pylint: disable=W0311
 
+import argparse
 import hashlib
 import json
 import os
@@ -11,16 +12,19 @@ import string
 import sys
 import urllib
 import urlparse
+
 from BaseHTTPServer import BaseHTTPRequestHandler,HTTPServer
 
-HOSTNAME = 'myhostname.com'
-PORT_NUMBER = 8642
+
+DEFAULT_PORT_NUMBER = 8642
 
 ERROR_IMAGE = 'error.png'
 
 QUICKLATEX_URL = 'http://quicklatex.com/latex3.f'
 
-charset = string.ascii_lowercase + string.digits
+# Used for temp file names
+CHARSET = string.ascii_lowercase + string.digits
+
 
 def render_QuickLatex(latex_string, dest):
   latex_string = '\\[ %s \\]' % latex_string
@@ -51,8 +55,9 @@ def render_QuickLatex(latex_string, dest):
   # Add transparent padding
   print os.system('convert %s -bordercolor none -border 5x5 %s' % (dest, dest))
 
+
 def render_local(latex_string, dest):
-  random_string = ''.join(random.choice(charset) for i in range(16))
+  random_string = ''.join(random.choice(CHARSET) for i in range(16))
   tmpfile = '/tmp/%s.tex' % (random_string,)
 
   latex_file = open(tmpfile, 'w')
@@ -69,12 +74,22 @@ def render_local(latex_string, dest):
   print os.system('pdflatex -output-directory /tmp -halt-on-error ' + tmpfile)
   print os.system('pdfcrop --margins 2 /tmp/%s.pdf' % (random_string,))
   # TODO: output to tmp file, then move to images dir
-  print os.system('convert -density 150 /tmp/%s-crop.pdf -quality 90 %s' % (random_string, dest))
+  print os.system('convert -density 150 /tmp/%s-crop.pdf -quality 90 %s' %
+                  (random_string, dest))
 
   # Cleanup temporary files.
   print os.system('rm -f /tmp/%s*' % random_string)
 
+
 class LatexHandler(BaseHTTPRequestHandler):
+
+  @classmethod
+  def _set_handler_info(cls, hostname,
+                        port=DEFAULT_PORT_NUMBER, render=render_QuickLatex):
+    cls.hostname = hostname
+    cls.port = port
+    cls.render = render
+
   def do_POST(self):
     # Extract and print the contents of the POST
     length = int(self.headers['Content-Length'])
@@ -89,7 +104,7 @@ class LatexHandler(BaseHTTPRequestHandler):
       'title': "LaTeX Image (powered by <http://quicklatex.com/|QuickLaTeX>)",
       'fallback': "Could not render equation",
       'image_url':  "http://%s:%s/%s" % (
-        HOSTNAME, PORT_NUMBER, urllib.quote(latex_string)),
+        self.hostname, self.port, urllib.quote(latex_string)),
     }]
 
     self.send_response(200)
@@ -127,26 +142,60 @@ class LatexHandler(BaseHTTPRequestHandler):
       self.send_header('Content-type', 'image/png')
       self.end_headers()
       self.wfile.write(image_file.read())
-
 # end LatexHandler
 
 
-if __name__ == '__main__':
+def run(hostname, port=DEFAULT_PORT_NUMBER, render=render_QuickLatex):
+  """Run the bot with the specified rendering function."""
   done = False
   while not done:
     try:
+      # Setup the handler
+      LatexHandler._set_handler_info(hostname, port=port, render=render)
+
       # Create a web server using latex handler to manage requests.
-      server = HTTPServer(('', PORT_NUMBER), LatexHandler)
-      print >> sys.stderr, 'Started server on port:', PORT_NUMBER
+      server = HTTPServer(('', port), LatexHandler)
+      print >> sys.stderr, ("Started server at %s on %s:" % (hostname, port))
 
       # Wait forever for incoming http requests.
       server.serve_forever()
 
     except KeyboardInterrupt:
-      print >> sys.stderr, '^C received, shutting down server.'
+      print >> sys.stderr, "^C received, shutting down server."
       server.socket.close()
       done = True
 
     except:
       e = sys.exc_info()[0]
       print e
+
+
+def main():
+  parser = argparse.ArgumentParser(description='Run the Slack LaTeXBot.')
+
+  mgroup = parser.add_mutually_exclusive_group(required=False)
+  mgroup.add_argument('-l', '--local', action='store_true',
+    help="render locally (potentially unsafe)")
+  mgroup.add_argument('-q', '--quick-latex', action='store_true',
+    help="render using QuickLaTeX [default]")
+
+  parser.add_argument('-p', '--port', metavar="PORT_NUMBER", nargs=1, type=int,
+    help=("the port number to use [default is %s]" % DEFAULT_PORT_NUMBER))
+  parser.add_argument('-H', '--hostname', metavar="HOSTNAME", nargs=1,
+    help="the fully qualified hostname of this machine", required=True)
+
+  args = parser.parse_args()
+
+  if args.local:
+    render = render_local
+  else:
+    render = render_QuickLatex
+
+  if args.port:
+    run(args.hostname[0], port=args.port[0], render=render)
+  else:
+    run(args.hostname[0], render=render)
+
+
+if __name__ == '__main__':
+  main()
