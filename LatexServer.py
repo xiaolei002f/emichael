@@ -27,6 +27,7 @@ CHARSET = string.ascii_lowercase + string.digits
 
 
 def render_QuickLatex(latex_string, dest):
+  print "Rendering %s on QuickLaTeX..." % latex_string
   latex_string = '\\[ %s \\]' % latex_string
   data = {
     'formula': latex_string,
@@ -57,6 +58,7 @@ def render_QuickLatex(latex_string, dest):
 
 
 def render_local(latex_string, dest):
+  print "Rendering %s locally..." % latex_string
   random_string = ''.join(random.choice(CHARSET) for i in range(16))
   tmpfile = '/tmp/%s.tex' % (random_string,)
 
@@ -127,7 +129,7 @@ class LatexHandler(BaseHTTPRequestHandler):
       self.send_image(image_file)
       return
 
-    render_QuickLatex(equation, image_file)
+    self.render(equation, image_file)
 
     # If successful, png exists. Send it as http response.
     if not os.path.isfile(image_file):
