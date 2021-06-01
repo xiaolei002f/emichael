@@ -26,8 +26,9 @@ QUICKLATEX_URL = 'http://quicklatex.com/latex3.f'
 CHARSET = string.ascii_lowercase + string.digits
 
 
-def render_QuickLatex(latex_string, dest):
-  print "Rendering %s on QuickLaTeX..." % latex_string
+# Dirty hack to disregard the self argument
+def render_QuickLatex(_, latex_string, dest):
+  print >> sys.stderr, "Rendering %s on QuickLaTeX..." % latex_string
   latex_string = '\\[ %s \\]' % latex_string
   data = {
     'formula': latex_string,
@@ -57,8 +58,8 @@ def render_QuickLatex(latex_string, dest):
   print os.system('convert %s -bordercolor none -border 5x5 %s' % (dest, dest))
 
 
-def render_local(latex_string, dest):
-  print "Rendering %s locally..." % latex_string
+def render_local(_, latex_string, dest):
+  print >> sys.stderr, "Rendering %s locally..." % latex_string
   random_string = ''.join(random.choice(CHARSET) for i in range(16))
   tmpfile = '/tmp/%s.tex' % (random_string,)
 
