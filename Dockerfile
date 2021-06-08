@@ -26,14 +26,14 @@ ENTRYPOINT ["/tini", "--"]
 # Install app
 COPY LatexServer.py error.png requirements.txt /
 RUN pip install -r requirements.txt
-RUN mkdir -p images
+RUN mkdir images
 
 
 # Don't run as root
-RUN chmod ugo+rx LatexServer.py && \
-    chmod ugo+r error.png requirements.txt && \
-    chmod -R ugo+rwx images/
-USER nobody
+RUN adduser --system --shell /bin/bash --uid 724 --group \
+      --no-create-home --disabled-password --disabled-login slacklatex  && \
+    chown -R slacklatex:slacklatex LatexServer.py error.png requirements.txt images
+USER slacklatex
 
 
 # Setup app
